@@ -30,6 +30,7 @@ interface ExtendedChatMessage extends ChatMessage {
   notice?: string;
   provider?: string;
   model?: string;
+  statusCode?: number;
 }
 
 interface AiAssistantPageProps {
@@ -141,6 +142,7 @@ export const AiAssistantPage: React.FC<AiAssistantPageProps> = ({
           isError: true,
           retryable: res?.retryable ?? true,
           failedPrompt: query,
+          statusCode: res?.statusCode,
         };
         setMessages((prev) => [...prev, errorMsg]);
       }
@@ -340,7 +342,11 @@ export const AiAssistantPage: React.FC<AiAssistantPageProps> = ({
                     {isError && msg.retryable && msg.failedPrompt && (
                       <div className="mt-4 pt-3 border-t border-amber-500/30 flex items-center justify-between">
                         <span className="text-[11px] text-amber-300/80">
-                          Temporary issue encountered.
+                          {msg.statusCode === 429
+                            ? "Provider rate limit reached. Retries available with backoff."
+                            : msg.statusCode === 401 || msg.statusCode === 403
+                            ? "Authentication issue. Please check AI_API_KEY."
+                            : "Service temporarily delayed. Retry when ready."}
                         </span>
                         <button
                           onClick={() => handleSend(msg.failedPrompt)}

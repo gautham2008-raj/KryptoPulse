@@ -269,7 +269,7 @@ MANDATORY PROFESSIONAL GUIDELINES:
 
   getStatus(): AIStatus {
     const key = process.env.AI_API_KEY || process.env.GEMINI_API_KEY || this.apiKey;
-    const model = process.env.AI_MODEL || this.primaryModel;
+    const model = this.primaryModel;
     return {
       status: key && key.trim().length > 5 ? "OK" : "NOT_CONFIGURED",
       provider: "gemini",

@@ -1,3 +1,4 @@
+import chatHandler from "./chat";
 import {
   getLiveMarkets,
   getCoinHistory,
@@ -116,6 +117,11 @@ export default async function handler(req: any, res: any) {
     } catch (err: any) {
       return res.status(500).json({ success: false, error: err?.message || "Failed to compute indicators" });
     }
+  }
+
+  // Route 6: /api/chat
+  if (url.includes("/chat")) {
+    return chatHandler(req, res);
   }
 
   // Default healthcheck

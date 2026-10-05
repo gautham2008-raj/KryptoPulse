@@ -390,17 +390,22 @@ export async function sendChatMessage(
 
     if (!res.ok) {
       const status = res.status;
-      let userFriendlyMsg = "The AI assistant is temporarily unavailable. Please try again.";
+      let userFriendlyMsg =
+        data?.error && typeof data.error === "string" && !data.error.includes("{")
+          ? data.error
+          : "AI service is temporarily unavailable. Please try again.";
 
-      if (status === 503) {
-        userFriendlyMsg = "The AI service is temporarily busy. Please try again in a moment.";
-      } else if (status === 429) {
-        userFriendlyMsg = "The AI service is currently rate-limited. Please try again shortly.";
-      } else if (status === 401 || status === 403) {
-        userFriendlyMsg = "AI API key authentication failed. Please verify your environment configuration.";
-      } else if (data?.error && typeof data.error === "string" && !data.error.includes("{")) {
-        userFriendlyMsg = data.error;
+      if (!data?.error) {
+        if (status === 503) {
+          userFriendlyMsg = "AI service is temporarily unavailable. Please try again.";
+        } else if (status === 429) {
+          userFriendlyMsg = "AI service is currently rate limited. Please try again shortly.";
+        } else if (status === 401 || status === 403) {
+          userFriendlyMsg = "AI authentication needs to be checked.";
+        }
       }
+
+      console.warn(`[KryptoPulse AI] Endpoint returned HTTP ${status}:`, userFriendlyMsg);
 
       return {
         success: false,
