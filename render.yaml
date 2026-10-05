@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: kryptopulse-crypto-platform
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: tsx server.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: AI_PROVIDER
+        value: gemini
+      - key: AI_MODEL
+        value: gemini-flash-latest
+      - key: GEMINI_API_KEY
+        sync: false
