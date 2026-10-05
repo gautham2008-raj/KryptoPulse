@@ -16,7 +16,7 @@ import { GraphicalAnalysisPage } from "./pages/GraphicalAnalysisPage";
 import { ComparisonPage } from "./pages/ComparisonPage";
 import { LivePricesPage } from "./pages/LivePricesPage";
 import { AiAssistantPage } from "./pages/AiAssistantPage";
-import { CryptoCoin, FiatCurrencyCode } from "./types/crypto";
+import { CryptoCoin, FiatCurrencyCode, SyncStatus } from "./types/crypto";
 import { fetchLiveMarkets } from "./services/api";
 import { getSavedCurrency, saveCurrency } from "./utils/currencies";
 
@@ -30,6 +30,7 @@ export default function App() {
   const [coins, setCoins] = useState<CryptoCoin[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>("SYNCING");
   const [error, setError] = useState<string | null>(null);
 
   // Sync route with browser history
@@ -56,25 +57,59 @@ export default function App() {
 
   // Centralized live market data loader
   const loadMarketData = useCallback(async () => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setSyncStatus("OFFLINE");
+      return;
+    }
+
     try {
       setLoading(true);
+      if (coins.length === 0) {
+        setSyncStatus("SYNCING");
+      }
       const res = await fetchLiveMarkets(currency);
-      if (res && res.data && Array.isArray(res.data)) {
+      if (res && res.data && Array.isArray(res.data) && res.data.length > 0) {
         setCoins(res.data);
         setLastUpdated(res.lastUpdated || new Date().toISOString());
         setError(null);
+        setSyncStatus("LIVE");
       } else {
         throw new Error("Invalid market response format");
       }
     } catch (err: any) {
       console.warn("Market sync notice:", err);
-      if (coins.length === 0) {
+      if (coins.length > 0) {
+        setSyncStatus("STALE");
+      } else {
+        setSyncStatus("API_ERROR");
         setError("Market telemetry syncing with public feed...");
       }
     } finally {
       setLoading(false);
     }
   }, [currency, coins.length]);
+
+  // Online / Offline state tracking
+  useEffect(() => {
+    const handleOnline = () => {
+      loadMarketData();
+    };
+    const handleOffline = () => {
+      setSyncStatus("OFFLINE");
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      setSyncStatus("OFFLINE");
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, [loadMarketData]);
 
   useEffect(() => {
     loadMarketData();
@@ -105,6 +140,7 @@ export default function App() {
             currency={currency}
             lastUpdated={lastUpdated}
             loading={loading}
+            syncStatus={syncStatus}
             onRefresh={loadMarketData}
             onNavigate={navigateTo}
           />
@@ -131,6 +167,7 @@ export default function App() {
             currency={currency}
             loading={loading}
             lastUpdated={lastUpdated}
+            syncStatus={syncStatus}
             onRefresh={loadMarketData}
             onNavigate={navigateTo}
           />
@@ -191,6 +228,7 @@ export default function App() {
         onNavigate={navigateTo}
         coins={coins}
         lastUpdated={lastUpdated}
+        syncStatus={syncStatus}
         isLive={!error}
         currency={currency}
         onSelectCurrency={handleCurrencyChange}

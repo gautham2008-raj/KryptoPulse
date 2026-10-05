@@ -146,3 +146,5 @@ export interface CryptoCoinHistoryInfo {
   color: string;
   gradient: string;
 }
+
+export type SyncStatus = "SYNCING" | "LIVE" | "STALE" | "API_ERROR" | "OFFLINE";

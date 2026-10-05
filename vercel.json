@@ -1,0 +1,18 @@
+{
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/crypto/history/:coinId",
+      "destination": "/api/crypto/history/[coinId]"
+    },
+    {
+      "source": "/api/crypto/technical/:coinId",
+      "destination": "/api/crypto/technical/[coinId]"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ]
+}

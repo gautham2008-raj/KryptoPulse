@@ -7,15 +7,17 @@ import {
   ArrowLeft,
   Clock,
 } from "lucide-react";
-import { CryptoCoin, FiatCurrencyCode } from "../types/crypto";
+import { CryptoCoin, FiatCurrencyCode, SyncStatus } from "../types/crypto";
 import { formatCurrency, formatLargeCurrency, formatPercent, formatSupply } from "../utils/formatters";
 import { SUPPORTED_CURRENCIES } from "../utils/currencies";
+import { SyncStatusBadge } from "../components/SyncStatusBadge";
 
 interface MarketAnalysisPageProps {
   coins: CryptoCoin[];
   currency: FiatCurrencyCode;
   loading: boolean;
   lastUpdated: string;
+  syncStatus?: SyncStatus;
   onRefresh: () => void;
   onNavigate: (path: string) => void;
 }
@@ -25,6 +27,7 @@ export const MarketAnalysisPage: React.FC<MarketAnalysisPageProps> = ({
   currency,
   loading,
   lastUpdated,
+  syncStatus = "LIVE",
   onRefresh,
   onNavigate,
 }) => {
@@ -81,9 +84,11 @@ export const MarketAnalysisPage: React.FC<MarketAnalysisPageProps> = ({
         {/* Hero Header */}
         <div className="mt-8 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-950/60 px-3.5 py-1 text-xs font-semibold text-emerald-300">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Live Market Telemetry ({currencyConfig.code} {currencyConfig.symbol})</span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              <SyncStatusBadge status={syncStatus} lastUpdated={lastUpdated} />
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                • {currencyConfig.code} ({currencyConfig.symbol})
+              </span>
             </div>
             <h1 className="font-heading mt-3 text-3xl font-extrabold text-white sm:text-4xl">
               Live Cryptocurrency Market Analysis

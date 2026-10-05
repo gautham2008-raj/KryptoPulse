@@ -13,9 +13,10 @@ import {
   PieChart,
   ChevronRight,
 } from "lucide-react";
-import { CryptoCoin, FiatCurrencyCode } from "../types/crypto";
+import { CryptoCoin, FiatCurrencyCode, SyncStatus } from "../types/crypto";
 import { formatCurrency, formatPercent } from "../utils/formatters";
 import { CurrencySelector } from "./CurrencySelector";
+import { SyncStatusBadge } from "./SyncStatusBadge";
 import { SUPPORTED_CURRENCIES } from "../utils/currencies";
 
 interface NavbarProps {
@@ -23,6 +24,7 @@ interface NavbarProps {
   onNavigate: (path: string) => void;
   coins?: CryptoCoin[];
   lastUpdated?: string;
+  syncStatus?: SyncStatus;
   isLive?: boolean;
   currency: FiatCurrencyCode;
   onSelectCurrency: (currency: FiatCurrencyCode) => void;
@@ -33,6 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   coins = [],
   lastUpdated,
+  syncStatus = "LIVE",
   isLive = true,
   currency,
   onSelectCurrency,
@@ -67,16 +70,11 @@ export const Navbar: React.FC<NavbarProps> = ({
       {coins.length > 0 && (
         <div className="hidden border-b border-slate-800/80 bg-slate-950/60 py-1.5 px-4 lg:block">
           <div className="mx-auto flex max-w-7xl items-center justify-between text-xs">
-            <div className="flex items-center gap-2 text-slate-400">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-              <span className="font-semibold uppercase tracking-wider text-slate-300">
-                Live Market Ticker ({currencyConfig.code} {currencyConfig.symbol})
+            <div className="flex items-center gap-3">
+              <SyncStatusBadge status={syncStatus} lastUpdated={lastUpdated} />
+              <span className="font-semibold uppercase tracking-wider text-slate-400">
+                Market Telemetry ({currencyConfig.code} {currencyConfig.symbol})
               </span>
-              {lastUpdated && (
-                <span className="text-slate-500">
-                  • Synced: {new Date(lastUpdated).toLocaleTimeString()}
-                </span>
-              )}
             </div>
 
             <div className="flex items-center gap-6 overflow-x-auto font-mono-numbers">

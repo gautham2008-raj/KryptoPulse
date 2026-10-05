@@ -1,5 +1,79 @@
 import { GoogleGenAI } from "@google/genai";
 
+export class AIError extends Error {
+  code: string;
+  statusCode: number;
+
+  constructor(code: string, message: string, statusCode = 500) {
+    super(message);
+    this.name = "AIError";
+    this.code = code;
+    this.statusCode = statusCode;
+  }
+}
+
+export function classifyAIError(err: any): { message: string; statusCode: number; code: string } {
+  if (err instanceof AIError) {
+    return { message: err.message, statusCode: err.statusCode, code: err.code };
+  }
+  const msg = String(err?.message || err);
+  const status = err?.status || err?.statusCode || 0;
+
+  if (
+    status === 429 ||
+    msg.includes("429") ||
+    msg.includes("RESOURCE_EXHAUSTED") ||
+    msg.includes("quota") ||
+    msg.includes("Quota") ||
+    msg.includes("rate limit")
+  ) {
+    return {
+      message: "AI service is currently rate limited. Please try again shortly.",
+      statusCode: 429,
+      code: "RATE_LIMITED",
+    };
+  }
+  if (
+    status === 401 ||
+    status === 403 ||
+    msg.includes("401") ||
+    msg.includes("403") ||
+    msg.includes("API key") ||
+    msg.includes("AUTH_FAILED") ||
+    msg.includes("authentication")
+  ) {
+    return {
+      message: "AI authentication needs to be checked.",
+      statusCode: 401,
+      code: "AUTH_FAILED",
+    };
+  }
+  if (
+    status === 503 ||
+    status === 502 ||
+    status === 504 ||
+    msg.includes("503") ||
+    msg.includes("502") ||
+    msg.includes("504") ||
+    msg.includes("timeout") ||
+    msg.includes("ETIMEDOUT") ||
+    msg.includes("ECONNRESET") ||
+    msg.includes("fetch failed") ||
+    msg.includes("network")
+  ) {
+    return {
+      message: "AI service is temporarily unavailable. Please try again.",
+      statusCode: 503,
+      code: "SERVICE_UNAVAILABLE",
+    };
+  }
+  return {
+    message: "AI service is temporarily unavailable. Please try again.",
+    statusCode: 500,
+    code: "AI_ERROR",
+  };
+}
+
 export interface AIAnalysisRequest {
   message: string;
   selectedCoin: string;
@@ -19,9 +93,17 @@ export interface AIAnalysisResponse {
   structuredContext?: any;
 }
 
+export interface AIStatus {
+  status: "OK" | "NOT_CONFIGURED" | "ERROR";
+  provider: string;
+  model: string;
+  keyConfigured: boolean;
+}
+
 export interface IAIProviderAdapter {
   name: string;
   generateAnalysis(req: AIAnalysisRequest): Promise<AIAnalysisResponse>;
+  getStatus(): AIStatus;
 }
 
 // -----------------------------------------------------------------------------
@@ -34,14 +116,23 @@ export class GeminiProviderAdapter implements IAIProviderAdapter {
   private fallbackModel: string;
 
   constructor(apiKey?: string, model?: string) {
-    this.apiKey = apiKey || process.env.GEMINI_API_KEY || process.env.AI_API_KEY || "";
-    this.primaryModel = model || process.env.AI_MODEL || process.env.GEMINI_MODEL || "gemini-flash-latest";
-    this.fallbackModel = "gemini-3.1-flash-lite";
+    this.apiKey = (apiKey || process.env.GEMINI_API_KEY || process.env.AI_API_KEY || "").trim();
+    let configuredModel = (model || process.env.AI_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash").trim();
+    if (
+      configuredModel === "gemini-1.5-flash" ||
+      configuredModel === "gemini-2.5-flash" ||
+      configuredModel === "gemini-flash-latest" ||
+      configuredModel === "gemini-pro"
+    ) {
+      configuredModel = "gemini-3.8-flash";
+    }
+    this.primaryModel = configuredModel || "gemini-3.8-flash";
+    this.fallbackModel = "gemini-3.8-flash";
   }
 
   async generateAnalysis(req: AIAnalysisRequest): Promise<AIAnalysisResponse> {
     if (!this.apiKey) {
-      throw new Error("AUTH_FAILED: No API key configured for Gemini provider.");
+      throw new AIError("AUTH_FAILED", "AI authentication needs to be checked.", 401);
     }
 
     const ai = new GoogleGenAI({
@@ -135,11 +226,11 @@ MANDATORY PROFESSIONAL GUIDELINES:
         }
       } catch (err: any) {
         lastError = err;
-        const msg = String(err?.message || err);
+        const classified = classifyAIError(err);
 
-        // Do not retry 401/403
-        if (msg.includes("401") || msg.includes("403") || msg.includes("API key")) {
-          throw new Error("AUTH_FAILED: Authentication error with Gemini API.");
+        // Do not retry 401/403 auth errors or 429 quota exhaustion
+        if (classified.statusCode === 401 || classified.statusCode === 429) {
+          throw new AIError(classified.code, classified.message, classified.statusCode);
         }
 
         if (attempt < 3) {
@@ -148,29 +239,43 @@ MANDATORY PROFESSIONAL GUIDELINES:
       }
     }
 
-    // Try fallback model if 503 / 429 persisted
-    try {
-      const response = await ai.models.generateContent({
-        model: this.fallbackModel,
-        contents,
-        config: {
-          systemInstruction,
-          temperature: 0.7,
-        },
-      });
-
-      if (response.text) {
-        return {
-          reply: response.text,
-          provider: "gemini",
+    // Try fallback model if 503 / transient server errors persisted
+    if (this.fallbackModel !== this.primaryModel) {
+      try {
+        const response = await ai.models.generateContent({
           model: this.fallbackModel,
-        };
+          contents,
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+          },
+        });
+
+        if (response.text) {
+          return {
+            reply: response.text,
+            provider: "gemini",
+            model: this.fallbackModel,
+          };
+        }
+      } catch (fbErr) {
+        lastError = fbErr;
       }
-    } catch (fbErr) {
-      lastError = fbErr;
     }
 
-    throw lastError || new Error("Gemini generation failed after retries.");
+    const finalClassified = classifyAIError(lastError);
+    throw new AIError(finalClassified.code, finalClassified.message, finalClassified.statusCode);
+  }
+
+  getStatus(): AIStatus {
+    const key = process.env.AI_API_KEY || process.env.GEMINI_API_KEY || this.apiKey;
+    const model = process.env.AI_MODEL || this.primaryModel;
+    return {
+      status: key && key.trim().length > 5 ? "OK" : "NOT_CONFIGURED",
+      provider: "gemini",
+      model,
+      keyConfigured: Boolean(key && key.trim().length > 5),
+    };
   }
 }
 
@@ -187,6 +292,16 @@ export class OpenAICompatibleAdapter implements IAIProviderAdapter {
     this.apiKey = apiKey || process.env.OPENAI_API_KEY || "";
     this.model = model || process.env.AI_MODEL || "gpt-4o-mini";
     this.baseUrl = baseUrl || process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
+  }
+
+  getStatus(): AIStatus {
+    const key = process.env.OPENAI_API_KEY || this.apiKey;
+    return {
+      status: key && key.trim().length > 5 ? "OK" : "NOT_CONFIGURED",
+      provider: "openai-compatible",
+      model: process.env.AI_MODEL || this.model,
+      keyConfigured: Boolean(key && key.trim().length > 5),
+    };
   }
 
   async generateAnalysis(req: AIAnalysisRequest): Promise<AIAnalysisResponse> {
@@ -238,24 +353,26 @@ export class OpenAICompatibleAdapter implements IAIProviderAdapter {
 // 3. Central AI Service Manager (Factory Pattern)
 // -----------------------------------------------------------------------------
 export class AIService {
-  private adapter: IAIProviderAdapter;
-
-  constructor() {
-    const provider = (process.env.AI_PROVIDER || "gemini").toLowerCase();
+  private getAdapter(): IAIProviderAdapter {
+    const provider = (process.env.AI_PROVIDER || "gemini").trim().toLowerCase();
 
     if (provider === "openai" || provider === "openai-compatible") {
-      this.adapter = new OpenAICompatibleAdapter();
-    } else {
-      this.adapter = new GeminiProviderAdapter();
+      return new OpenAICompatibleAdapter();
     }
+    // Default to Google Gemini provider
+    return new GeminiProviderAdapter();
   }
 
   getProviderName(): string {
-    return this.adapter.name;
+    return this.getAdapter().name;
+  }
+
+  getStatus(): AIStatus {
+    return this.getAdapter().getStatus();
   }
 
   async analyze(req: AIAnalysisRequest): Promise<AIAnalysisResponse> {
-    return this.adapter.generateAnalysis(req);
+    return this.getAdapter().generateAnalysis(req);
   }
 }
 

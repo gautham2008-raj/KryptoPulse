@@ -14,16 +14,18 @@ import {
   Clock,
   Sparkles,
 } from "lucide-react";
-import { CryptoCoin, FiatCurrencyCode } from "../types/crypto";
+import { CryptoCoin, FiatCurrencyCode, SyncStatus } from "../types/crypto";
 import { PriceCard } from "../components/PriceCard";
 import { formatCurrency, formatLargeCurrency, formatPercent } from "../utils/formatters";
 import { SUPPORTED_CURRENCIES } from "../utils/currencies";
+import { SyncStatusBadge } from "../components/SyncStatusBadge";
 
 interface DashboardPageProps {
   coins: CryptoCoin[];
   currency: FiatCurrencyCode;
   lastUpdated: string;
   loading: boolean;
+  syncStatus?: SyncStatus;
   onRefresh: () => void;
   onNavigate: (path: string) => void;
 }
@@ -33,6 +35,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
   currency,
   lastUpdated,
   loading,
+  syncStatus = "LIVE",
   onRefresh,
   onNavigate,
 }) => {
@@ -152,10 +155,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
         {/* Header Status Bar */}
         <div className="flex flex-col gap-4 border-b border-slate-800/80 pb-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                Synchronized • Base: {currencyConfig.code} ({currencyConfig.symbol})
+            <div className="flex flex-wrap items-center gap-2.5">
+              <SyncStatusBadge status={syncStatus} lastUpdated={lastUpdated} />
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                • Base: {currencyConfig.code} ({currencyConfig.symbol})
               </span>
             </div>
             <h1 className="font-heading mt-1 text-2xl font-black tracking-tight text-white sm:text-3xl">
