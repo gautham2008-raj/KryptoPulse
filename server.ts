@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import chatHandler from "./api/chat";
+import healthHandler from "./api/health";
 import { aiService, AIAnalysisRequest, classifyAIError } from "./src/server/aiService";
 import {
   getLiveMarkets,
@@ -37,39 +38,8 @@ app.use((req, res, next) => {
 // -----------------------------------------------------------------------------
 
 // 0. Diagnostic Health Check Endpoint
-app.get("/api/health", async (_req, res) => {
-  const cryptoHealth = await getCryptoHealth();
-  const aiHealth = aiService.getStatus();
-  const isHealthy = cryptoHealth.status === "OK";
-
-  res.status(isHealthy ? 200 : 503).json({
-    status: isHealthy ? "OK" : "DEGRADED",
-    timestamp: new Date().toISOString(),
-    application: "OK",
-    cryptoApi: {
-      status: cryptoHealth.status,
-      provider: cryptoHealth.provider,
-      latencyMs: cryptoHealth.latencyMs,
-      trackedCoins: cryptoHealth.trackedCoins || ["BTC", "ETH", "USDT", "BNB", "SOL"],
-      coinsSynced: cryptoHealth.coinsSynced,
-      lastSync: cryptoHealth.lastSync,
-    },
-    aiApi: {
-      status: aiHealth.status,
-      provider: aiHealth.provider,
-      model: aiHealth.model,
-      keyConfigured: aiHealth.keyConfigured,
-      note: aiHealth.keyConfigured
-        ? "AI key configured and authenticated"
-        : "AI key not configured; add AI_API_KEY in Vercel Project Settings > Environment Variables",
-    },
-    currencies: {
-      status: "OK",
-      supported: Object.keys(SUPPORTED_CURRENCIES),
-      default: "INR",
-    },
-    environment: process.env.NODE_ENV || "development",
-  });
+app.get("/api/health", async (req, res) => {
+  return healthHandler(req, res);
 });
 
 // 1. Currencies List Endpoint

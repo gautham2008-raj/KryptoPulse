@@ -1,3 +1,5 @@
+import { getGeminiApiKey, getValidGeminiModel } from "./chat";
+
 export default async function handler(req: any, res: any) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -8,13 +10,10 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  const aiKey = (process.env.AI_API_KEY || process.env.GEMINI_API_KEY || "").trim();
-  const rawModel = (process.env.AI_MODEL || process.env.GEMINI_MODEL || "gemini-3.8-flash").trim();
-  const model =
-    rawModel === "gemini-1.5-flash" || rawModel === "gemini-2.5-flash" || rawModel === "gemini-flash-latest"
-      ? "gemini-3.8-flash"
-      : rawModel;
+  const { key: aiKey, source: keySource } = getGeminiApiKey();
+  const model = getValidGeminiModel();
   const provider = (process.env.AI_PROVIDER || "gemini").trim().toLowerCase();
+  const isKeyConfigured = Boolean(aiKey && aiKey.length > 5);
 
   // Test crypto latency to public endpoint
   let cryptoStatus = "OK";
@@ -45,14 +44,14 @@ export default async function handler(req: any, res: any) {
       lastSync: new Date().toISOString(),
     },
     aiApi: {
-      status: aiKey.length > 5 ? "OK" : "NOT_CONFIGURED",
+      status: isKeyConfigured ? "OK" : "NOT_CONFIGURED",
       provider,
       model,
-      keyConfigured: Boolean(aiKey && aiKey.length > 5),
-      note:
-        aiKey.length > 5
-          ? "AI key configured and authenticated"
-          : "AI key not configured; add AI_API_KEY in Vercel Project Settings > Environment Variables",
+      keyConfigured: isKeyConfigured,
+      keySourceDetected: keySource,
+      note: isKeyConfigured
+        ? `AI key configured and authenticated (via ${keySource})`
+        : "AI key not configured; please set GEMINI_API_KEY or AI_API_KEY in Vercel Project Settings > Environment Variables, and trigger a redeploy",
     },
     currencies: {
       status: "OK",
